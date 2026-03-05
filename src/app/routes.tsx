@@ -3,6 +3,7 @@ import DashboardLayout from "./components/DashboardLayout";
 import OverviewTab from "./components/OverviewTab";
 import CalendarTab from "./components/CalendarTab";
 import ComponentsTab from "./components/ComponentsTab";
+import MapTab from "./components/MapTab";
 
 export const router = createBrowserRouter([
   {
@@ -12,6 +13,7 @@ export const router = createBrowserRouter([
       { index: true, Component: OverviewTab },
       { path: "calendar", Component: CalendarTab },
       { path: "components", Component: ComponentsTab },
+      { path: "map", Component: MapTab },
     ],
   },
 ]);

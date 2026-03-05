@@ -191,9 +191,15 @@ export default function OverviewTab() {
                 }}
                 formatter={(value: number) => [`${value} hours`, "Hours Remaining"]}
               />
-              <Bar dataKey="hoursUntil200Hr" radius={[8, 8, 0, 0]}>
-                {sortedAircraft.map((entry, index) => (
-                  <Cell key={`cell-${index}`} fill={getBarColor(entry.hoursUntil200Hr)} />
+              <Bar 
+                dataKey="hoursUntil200Hr" 
+                radius={[8, 8, 0, 0]}
+              >
+                {sortedAircraft.map((entry, idx) => (
+                  <Cell 
+                    key={`bar-cell-${idx}`} 
+                    fill={getBarColor(entry.hoursUntil200Hr)} 
+                  />
                 ))}
               </Bar>
             </BarChart>

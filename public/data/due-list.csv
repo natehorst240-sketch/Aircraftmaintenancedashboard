@@ -1,0 +1,10 @@
+# Example CSV placeholder
+# This file will be replaced by the FlightDocs scraper
+# Run: node src/imports/flightdocs-scraper.ts
+
+Aircraft,Registration,Item,Serial Number,Due At,Current Time,Remaining,Status
+N291HC,N291HC,Annual Inspection,INS-001,5000,4850,150,Current
+N291HC,N291HC,100 Hour Inspection,INS-002,4900,4850,50,Due Soon
+N431HC,N431HC,Annual Inspection,INS-003,4000,3920,80,Current
+N531HC,N531HC,Annual Inspection,INS-004,5200,5140,60,Due Soon
+N281HC,N281HC,Annual Inspection,INS-005,6400,6275,125,Current

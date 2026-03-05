@@ -6,6 +6,18 @@ export interface Aircraft {
   totalTime: number;
   hoursUntil200Hr: number;
   averageUtilization: number; // hours per day
+  location?: AircraftLocation; // Real-time GPS location
+  status: "in-flight" | "on-ground" | "maintenance";
+  isLive?: boolean; // Flag to indicate if data is from live ADS-B
+}
+
+export interface AircraftLocation {
+  latitude: number;
+  longitude: number;
+  altitude: number; // in feet
+  heading: number; // degrees
+  speed: number; // knots
+  lastUpdate: string; // ISO timestamp
 }
 
 export interface InspectionHours {
@@ -40,42 +52,72 @@ export interface CalendarEvent {
   notes?: string;
 }
 
-// Mock aircraft data
+// Your actual fleet aircraft with placeholder data
+// Live ADS-B data will update locations when available
 export const aircraftData: Aircraft[] = [
   {
     id: "AC001",
-    registration: "N123AB",
+    registration: "N291HC",
     totalTime: 4850,
     hoursUntil200Hr: 150,
     averageUtilization: 4.2,
+    status: "on-ground",
+    location: {
+      latitude: 40.7884, // Ogden, Utah
+      longitude: -111.9780,
+      altitude: 0,
+      heading: 0,
+      speed: 0,
+      lastUpdate: new Date().toISOString(),
+    },
   },
   {
     id: "AC002",
-    registration: "N456CD",
+    registration: "N431HC",
     totalTime: 3920,
     hoursUntil200Hr: 80,
     averageUtilization: 5.1,
+    status: "on-ground",
+    location: {
+      latitude: 40.7608, // Salt Lake City, Utah
+      longitude: -111.8910,
+      altitude: 0,
+      heading: 0,
+      speed: 0,
+      lastUpdate: new Date().toISOString(),
+    },
   },
   {
     id: "AC003",
-    registration: "N789EF",
+    registration: "N531HC",
     totalTime: 5140,
     hoursUntil200Hr: 60,
     averageUtilization: 3.8,
+    status: "on-ground",
+    location: {
+      latitude: 40.2200, // Provo, Utah
+      longitude: -111.6630,
+      altitude: 0,
+      heading: 0,
+      speed: 0,
+      lastUpdate: new Date().toISOString(),
+    },
   },
   {
     id: "AC004",
-    registration: "N321GH",
+    registration: "N281HC",
     totalTime: 6275,
     hoursUntil200Hr: 125,
     averageUtilization: 4.5,
-  },
-  {
-    id: "AC005",
-    registration: "N654IJ",
-    totalTime: 2890,
-    hoursUntil200Hr: 110,
-    averageUtilization: 6.2,
+    status: "on-ground",
+    location: {
+      latitude: 40.5900, // Bountiful, Utah
+      longitude: -111.8805,
+      altitude: 0,
+      heading: 0,
+      speed: 0,
+      lastUpdate: new Date().toISOString(),
+    },
   },
 ];
 
@@ -83,7 +125,7 @@ export const aircraftData: Aircraft[] = [
 export const inspectionHoursData: InspectionHours[] = [
   {
     aircraftId: "AC001",
-    registration: "N123AB",
+    registration: "N291HC",
     inspections: {
       "Annual Inspection": 450,
       "100 Hour": 50,
@@ -94,7 +136,7 @@ export const inspectionHoursData: InspectionHours[] = [
   },
   {
     aircraftId: "AC002",
-    registration: "N456CD",
+    registration: "N431HC",
     inspections: {
       "Annual Inspection": 220,
       "100 Hour": 20,
@@ -105,7 +147,7 @@ export const inspectionHoursData: InspectionHours[] = [
   },
   {
     aircraftId: "AC003",
-    registration: "N789EF",
+    registration: "N531HC",
     inspections: {
       "Annual Inspection": 140,
       "100 Hour": 40,
@@ -116,7 +158,7 @@ export const inspectionHoursData: InspectionHours[] = [
   },
   {
     aircraftId: "AC004",
-    registration: "N321GH",
+    registration: "N281HC",
     inspections: {
       "Annual Inspection": 325,
       "100 Hour": 25,
@@ -125,24 +167,13 @@ export const inspectionHoursData: InspectionHours[] = [
       "Pitot-Static": 725,
     },
   },
-  {
-    aircraftId: "AC005",
-    registration: "N654IJ",
-    inspections: {
-      "Annual Inspection": 510,
-      "100 Hour": 10,
-      "Transponder Check": 410,
-      "ELT Inspection": 710,
-      "Pitot-Static": 910,
-    },
-  },
 ];
 
 // Mock components data - showing components due within next 200 hours
 export const componentsData: AircraftComponents[] = [
   {
     aircraftId: "AC001",
-    registration: "N123AB",
+    registration: "N291HC",
     components: [
       {
         id: "C001",
@@ -166,7 +197,7 @@ export const componentsData: AircraftComponents[] = [
   },
   {
     aircraftId: "AC002",
-    registration: "N456CD",
+    registration: "N431HC",
     components: [
       {
         id: "C004",
@@ -196,7 +227,7 @@ export const componentsData: AircraftComponents[] = [
   },
   {
     aircraftId: "AC003",
-    registration: "N789EF",
+    registration: "N531HC",
     components: [
       {
         id: "C008",
@@ -232,7 +263,7 @@ export const componentsData: AircraftComponents[] = [
   },
   {
     aircraftId: "AC004",
-    registration: "N321GH",
+    registration: "N281HC",
     components: [
       {
         id: "C013",
@@ -251,36 +282,6 @@ export const componentsData: AircraftComponents[] = [
         name: "Tire Replacement",
         serialNumber: "TR-22334",
         hoursRemaining: 170,
-      },
-    ],
-  },
-  {
-    aircraftId: "AC005",
-    registration: "N654IJ",
-    components: [
-      {
-        id: "C016",
-        name: "Oil Filter",
-        serialNumber: "OF-77889",
-        hoursRemaining: 10,
-      },
-      {
-        id: "C017",
-        name: "Spark Plugs",
-        serialNumber: "SP-00112",
-        hoursRemaining: 110,
-      },
-      {
-        id: "C018",
-        name: "Fuel Filter",
-        serialNumber: "FF-33445",
-        hoursRemaining: 145,
-      },
-      {
-        id: "C019",
-        name: "Air Filter",
-        serialNumber: "AF-66778",
-        hoursRemaining: 190,
       },
     ],
   },

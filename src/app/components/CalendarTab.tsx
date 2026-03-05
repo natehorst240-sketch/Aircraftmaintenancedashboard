@@ -8,6 +8,7 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
+  DialogDescription,
   DialogFooter,
 } from "./ui/dialog";
 import { Label } from "./ui/label";
@@ -441,6 +442,9 @@ export default function CalendarTab() {
         <DialogContent className="sm:max-w-lg">
           <DialogHeader>
             <DialogTitle>Create Maintenance Event</DialogTitle>
+            <DialogDescription>
+              Add a new maintenance event to the calendar
+            </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
             <div className="space-y-2">
@@ -549,6 +553,9 @@ export default function CalendarTab() {
         <DialogContent className="sm:max-w-lg">
           <DialogHeader>
             <DialogTitle>Edit Maintenance Event</DialogTitle>
+            <DialogDescription>
+              Update or delete this maintenance event
+            </DialogDescription>
           </DialogHeader>
           {selectedEvent && (
             <div className="space-y-4 py-4">

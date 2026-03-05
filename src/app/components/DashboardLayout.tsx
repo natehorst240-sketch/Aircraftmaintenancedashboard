@@ -8,6 +8,7 @@ export default function DashboardLayout() {
   const getActiveTab = () => {
     if (location.pathname === "/calendar") return "calendar";
     if (location.pathname === "/components") return "components";
+    if (location.pathname === "/map") return "map";
     return "overview";
   };
 
@@ -48,6 +49,14 @@ export default function DashboardLayout() {
                   className="data-[state=active]:border-b-2 data-[state=active]:border-blue-600 rounded-none px-6"
                 >
                   Overview
+                </TabsTrigger>
+              </Link>
+              <Link to="/map">
+                <TabsTrigger
+                  value="map"
+                  className="data-[state=active]:border-b-2 data-[state=active]:border-blue-600 rounded-none px-6"
+                >
+                  Live Map
                 </TabsTrigger>
               </Link>
               <Link to="/calendar">
