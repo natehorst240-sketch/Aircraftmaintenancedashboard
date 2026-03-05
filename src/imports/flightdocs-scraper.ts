@@ -15,6 +15,8 @@ const DUE_LIST_URL: string =
   process.env.FLIGHTDOCS_DUE_LIST_URL ||
   'https://app2.flightdocs.com/#/maintenance/item/due-list?IncludePaging=false&SortDirection=1&SortProperty=status&ItemDescriptionConstraint=1&PartNumberConstraint=1&SerialNumberConstraint=1&AdSbNumberConstraint=1&ShowTolerance=false&AircraftIds=4345&AircraftIds=4348&AircraftIds=4351&AircraftIds=4353&AircraftIds=4431&AircraftIds=17517&AircraftIds=23110&AircraftIds=34361&AircraftIds=34200&ProjectedHours=3200&OverrideHours&Ofconst OUTPUT_PATH = './public/data/due-list.csv';EEKLY_aw109sp.csv';
 
+const OUTPUT_PATH = './public/data/due-list.csv';
+
 const MAX_ATTEMPTS: number = Number(process.env.FLIGHTDOCS_MAX_ATTEMPTS || 3);
 const HEADLESS: boolean = process.env.FLIGHTDOCS_HEADLESS !== 'false';
 
@@ -329,3 +331,4 @@ runWithRetries().catch((error: unknown) => {
   console.error(`[${timestamp()}] Fatal error:`, error);
   process.exit(1);
 });
+
