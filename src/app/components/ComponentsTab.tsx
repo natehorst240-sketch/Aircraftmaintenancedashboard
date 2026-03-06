@@ -9,13 +9,13 @@ import {
 } from "./ui/tooltip";
 import { Input } from "./ui/input";
 import { Search, AlertTriangle, Clock } from "lucide-react";
-import { componentsData, aircraftData } from "../data/mockData";
+import { useMaintenanceData } from "../hooks/useMaintenanceData";
 
 export default function ComponentsTab() {
   const [searchTerm, setSearchTerm] = useState("");
+  const { components, aircraft, isLoading, error } = useMaintenanceData();
 
-  // Filter components by search term
-  const filteredData = componentsData
+  const filteredData = components
     .map((aircraft) => ({
       ...aircraft,
       components: aircraft.components.filter(
@@ -69,6 +69,9 @@ export default function ComponentsTab() {
     );
   };
 
+  if (isLoading) return <div className="text-sm text-slate-600">Loading maintenance data...</div>;
+  if (error) return <div className="text-sm text-red-600">{error}</div>;
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -98,13 +101,13 @@ export default function ComponentsTab() {
       {/* Aircraft Component Cards - 3 per row */}
       <TooltipProvider>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {filteredData.map((aircraft) => {
-            const aircraftInfo = aircraftData.find(
-              (a) => a.id === aircraft.aircraftId
+          {filteredData.map((aircraftEntry) => {
+            const aircraftInfo = aircraft.find(
+              (a) => a.id === aircraftEntry.aircraftId
             );
 
             // Sort components by hours remaining
-            const sortedComponents = [...aircraft.components].sort(
+            const sortedComponents = [...aircraftEntry.components].sort(
               (a, b) => a.hoursRemaining - b.hoursRemaining
             );
 
@@ -117,18 +120,18 @@ export default function ComponentsTab() {
 
             return (
               <Card
-                key={aircraft.aircraftId}
+                key={aircraftEntry.aircraftId}
                 className="hover:shadow-lg transition-shadow"
               >
                 <CardHeader className="pb-4">
                   <div className="flex items-start justify-between">
                     <div>
                       <CardTitle className="text-xl">
-                        {aircraft.registration}
+                        {aircraftEntry.registration}
                       </CardTitle>
                       <p className="text-sm text-slate-500 mt-1">
-                        {aircraft.components.length} component
-                        {aircraft.components.length !== 1 ? "s" : ""} due
+                        {aircraftEntry.components.length} component
+                        {aircraftEntry.components.length !== 1 ? "s" : ""} due
                       </p>
                     </div>
                     <div className="flex flex-col gap-1">
@@ -196,7 +199,7 @@ export default function ComponentsTab() {
                                     Aircraft:
                                   </span>
                                   <span className="font-medium">
-                                    {aircraft.registration}
+                                    {aircraftEntry.registration}
                                   </span>
                                 </div>
                                 <div className="flex justify-between text-xs">
