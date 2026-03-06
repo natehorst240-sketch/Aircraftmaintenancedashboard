@@ -1,4 +1,3 @@
-import { useState } from "react";
 import {
   BarChart,
   Bar,
@@ -19,14 +18,13 @@ import {
   TableRow,
 } from "./ui/table";
 import { Badge } from "./ui/badge";
-import { aircraftData, inspectionHoursData } from "../data/mockData";
+import { useMaintenanceData } from "../hooks/useMaintenanceData";
 import { AlertTriangle, TrendingUp, Clock, Plane } from "lucide-react";
 
 export default function OverviewTab() {
-  // Sort aircraft by hours until 200hr (least to most)
-  const sortedAircraft = [...aircraftData].sort(
-    (a, b) => a.hoursUntil200Hr - b.hoursUntil200Hr
-  );
+  const { aircraft, inspections, isLoading, error } = useMaintenanceData();
+
+  const sortedAircraft = [...aircraft].sort((a, b) => a.hoursUntil200Hr - b.hoursUntil200Hr);
 
   // Get bar color based on hours remaining
   const getBarColor = (hours: number) => {
@@ -57,13 +55,10 @@ export default function OverviewTab() {
   };
 
   // All inspection types
-  const inspectionTypes = [
-    "Annual Inspection",
-    "100 Hour",
-    "Transponder Check",
-    "ELT Inspection",
-    "Pitot-Static",
-  ];
+  const inspectionTypes = ["50 Hr", "100 Hr", "200 Hr", "400 Hr", "800 Hr", "2400 Hr", "3200 Hr"];
+
+  if (isLoading) return <div className="text-sm text-slate-600">Loading maintenance data...</div>;
+  if (error) return <div className="text-sm text-red-600">{error}</div>;
 
   return (
     <div className="space-y-6">
@@ -76,7 +71,7 @@ export default function OverviewTab() {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-semibold">{aircraftData.length}</div>
+            <div className="text-3xl font-semibold">{aircraft.length}</div>
             <p className="text-sm text-slate-500 mt-1">Active in fleet</p>
           </CardContent>
         </Card>
@@ -104,8 +99,7 @@ export default function OverviewTab() {
           <CardContent>
             <div className="text-3xl font-semibold flex items-baseline gap-2">
               {(
-                aircraftData.reduce((sum, a) => sum + a.averageUtilization, 0) /
-                aircraftData.length
+                (aircraft.length ? aircraft.reduce((sum, a) => sum + a.averageUtilization, 0) / aircraft.length : 0)
               ).toFixed(1)}
               <span className="text-sm text-slate-500 font-normal">hrs/day</span>
             </div>
@@ -127,7 +121,7 @@ export default function OverviewTab() {
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4">
-            {aircraftData.map((aircraft) => (
+            {aircraft.map((aircraft) => (
               <div
                 key={aircraft.id}
                 className="border border-slate-200 rounded-lg p-4 hover:border-blue-300 transition-colors"
@@ -230,11 +224,8 @@ export default function OverviewTab() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {inspectionHoursData.map((aircraft) => {
-                  const aircraftInfo = aircraftData.find(
-                    (a) => a.id === aircraft.aircraftId
-                  );
-                  const minHours = Math.min(
+                {inspections.map((aircraft) => {
+                                    const minHours = Math.min(
                     ...Object.values(aircraft.inspections)
                   );
 

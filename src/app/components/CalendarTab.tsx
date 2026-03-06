@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useEffect } from "react";
 import { Card, CardContent } from "./ui/card";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
@@ -31,19 +31,15 @@ import {
 } from "lucide-react";
 import { Badge } from "./ui/badge";
 import { Tabs, TabsList, TabsTrigger } from "./ui/tabs";
-import {
-  generateCalendarEvents,
-  CalendarEvent,
-  aircraftData,
-} from "../data/mockData";
+import type { CalendarEvent } from "../types/maintenance";
+import { useMaintenanceData } from "../hooks/useMaintenanceData";
 
 type ViewMode = "month" | "week" | "day";
 
 export default function CalendarTab() {
   const [currentDate, setCurrentDate] = useState(new Date());
-  const [events, setEvents] = useState<CalendarEvent[]>(
-    generateCalendarEvents()
-  );
+  const [events, setEvents] = useState<CalendarEvent[]>([]);
+  const { aircraft, inspections, isLoading, error } = useMaintenanceData();
   const [selectedEvent, setSelectedEvent] = useState<CalendarEvent | null>(
     null
   );
@@ -70,14 +66,30 @@ export default function CalendarTab() {
   });
 
   // Get unique inspection types
-  const inspectionTypes = [
-    "Annual Inspection",
-    "100 Hour",
-    "200 Hour",
-    "Transponder Check",
-    "ELT Inspection",
-    "Pitot-Static",
-  ];
+  const inspectionTypes = ["50 Hr", "100 Hr", "200 Hr", "400 Hr", "800 Hr", "2400 Hr", "3200 Hr"];
+
+  useEffect(() => {
+    const generated = inspections.flatMap((entry) =>
+      Object.entries(entry.inspections).map(([inspectionType, hoursRemaining]) => {
+        const aircraftInfo = aircraft.find((a) => a.id === entry.aircraftId);
+        const utilization = aircraftInfo?.averageUtilization || 3;
+        const dueDate = new Date();
+        dueDate.setDate(dueDate.getDate() + Math.max(1, Math.ceil(hoursRemaining / utilization)));
+
+        return {
+          id: `${entry.aircraftId}-${inspectionType}`,
+          aircraftId: entry.aircraftId,
+          registration: entry.registration,
+          inspectionType,
+          dueDate: dueDate.toISOString().split("T")[0],
+          hoursRemaining,
+          notes: "Auto-generated from CSV remaining hours",
+        } as CalendarEvent;
+      })
+    );
+
+    setEvents(generated);
+  }, [aircraft, inspections]);
 
   // Filter events based on selected filters
   const filteredEvents = events.filter((event) => {
@@ -171,14 +183,14 @@ export default function CalendarTab() {
   };
 
   const handleSaveCreate = () => {
-    const aircraft = aircraftData.find((a) => a.id === createForm.aircraftId);
-    if (!aircraft || !createForm.inspectionType || !createForm.dueDate)
+    const selectedAircraftData = aircraft.find((a) => a.id === createForm.aircraftId);
+    if (!selectedAircraftData || !createForm.inspectionType || !createForm.dueDate)
       return;
 
     const newEvent: CalendarEvent = {
       id: `E${Date.now()}`,
       aircraftId: createForm.aircraftId,
-      registration: aircraft.registration,
+      registration: selectedAircraftData.registration,
       inspectionType: createForm.inspectionType,
       dueDate: createForm.dueDate,
       hoursRemaining: parseInt(createForm.hoursRemaining) || 0,
@@ -286,6 +298,9 @@ export default function CalendarTab() {
     return "bg-blue-500 hover:bg-blue-600 border-blue-600";
   };
 
+  if (isLoading) return <div className="text-sm text-slate-600">Loading maintenance data...</div>;
+  if (error) return <div className="text-sm text-red-600">{error}</div>;
+
   return (
     <div className="space-y-4">
       {/* Toolbar */}
@@ -355,7 +370,7 @@ export default function CalendarTab() {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Aircraft</SelectItem>
-                {aircraftData.map((aircraft) => (
+                {aircraft.map((aircraft) => (
                   <SelectItem key={aircraft.id} value={aircraft.id}>
                     {aircraft.registration}
                   </SelectItem>
@@ -452,11 +467,11 @@ export default function CalendarTab() {
               <Select
                 value={createForm.aircraftId}
                 onValueChange={(value) => {
-                  const aircraft = aircraftData.find((a) => a.id === value);
+                  const selected = aircraft.find((a) => a.id === value);
                   setCreateForm({
                     ...createForm,
                     aircraftId: value,
-                    registration: aircraft?.registration || "",
+                    registration: selected?.registration || "",
                   });
                 }}
               >
@@ -464,7 +479,7 @@ export default function CalendarTab() {
                   <SelectValue placeholder="Select aircraft" />
                 </SelectTrigger>
                 <SelectContent>
-                  {aircraftData.map((aircraft) => (
+                  {aircraft.map((aircraft) => (
                     <SelectItem key={aircraft.id} value={aircraft.id}>
                       {aircraft.registration}
                     </SelectItem>

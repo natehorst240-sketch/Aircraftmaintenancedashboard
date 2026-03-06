@@ -1,4 +1,3 @@
-import Papa from 'papaparse';
 import type {
   Aircraft,
   InspectionHours,
@@ -6,22 +5,93 @@ import type {
   Component,
 } from '../types/maintenance';
 
+
+function parseCsv(text: string): string[][] {
+  const rows: string[][] = [];
+  let row: string[] = [];
+  let value = '';
+  let inQuotes = false;
+
+  for (let i = 0; i < text.length; i += 1) {
+    const char = text[i];
+    const next = text[i + 1];
+
+    if (char === '"') {
+      if (inQuotes && next === '"') {
+        value += '"';
+        i += 1;
+      } else {
+        inQuotes = !inQuotes;
+      }
+    } else if (char === ',' && !inQuotes) {
+      row.push(value.trim());
+      value = '';
+    } else if ((char === '\n' || char === '\r') && !inQuotes) {
+      if (char === '\r' && next === '\n') i += 1;
+      row.push(value.trim());
+      if (row.some((cellValue) => cellValue !== '')) rows.push(row);
+      row = [];
+      value = '';
+    } else {
+      value += char;
+    }
+  }
+
+  if (value.length > 0 || row.length > 0) {
+    row.push(value.trim());
+    if (row.some((cellValue) => cellValue !== '')) rows.push(row);
+  }
+
+  return rows;
+}
 interface MaintenanceDataResult {
   aircraft: Aircraft[];
   inspections: InspectionHours[];
   components: AircraftComponents[];
 }
 
-type CsvRow = Record<string, string>;
+const TARGET_INTERVALS = [50, 100, 200, 400, 800, 2400, 3200] as const;
 
-function pick(row: CsvRow, keys: string[]): string {
-  for (const key of keys) {
-    const value = row[key];
-    if (value !== undefined && value !== null && String(value).trim() !== '') {
-      return String(value).trim();
-    }
-  }
-  return '';
+const PHASE_MATCH: Record<number, RegExp[]> = {
+  50: [new RegExp('05 1000', 'i'), new RegExp('62 MI62-01', 'i')],
+  100: [new RegExp('64 01\\[273\\]', 'i')],
+  200: [new RegExp('05 1005', 'i')],
+  400: [new RegExp('05 1010', 'i')],
+  800: [new RegExp('05 1015', 'i')],
+  2400: [new RegExp('62 11\\[373\\]', 'i')],
+  3200: [new RegExp('05 1020', 'i')],
+};
+
+const COMPONENT_WINDOW_HRS = 200;
+const RETIREMENT_KEYWORDS = [
+  'RETIRE',
+  'OVERHAUL',
+  'DISCARD',
+  'LIFE LIMIT',
+  'TBO',
+  'REPLACEMENT',
+  'REPLACE',
+  'CHANGE OIL',
+  'NOZZLE',
+];
+
+const COL_REG = 0;
+const COL_AIRFRAME_RPT = 2;
+const COL_AIRFRAME_HRS = 3;
+const COL_ATA = 5;
+const COL_EQUIP_HRS = 7;
+const COL_ITEM_TYPE = 11;
+const COL_DISPOSITION = 13;
+const COL_DESC = 15;
+const COL_INTERVAL_HRS = 30;
+const COL_REM_DAYS = 50;
+const COL_REM_MONTHS = 52;
+const COL_REM_HRS = 54;
+const COL_STATUS = 63;
+
+function cell(row: string[], index: number): string {
+  const value = row[index];
+  return value ? String(value).trim() : '';
 }
 
 function toNumber(value: string): number {
@@ -35,11 +105,31 @@ function makeComponentId(registration: string, name: string, serial: string, ind
   return `${registration}-${name || 'component'}-${serial || index}`.replace(/\s+/g, '-');
 }
 
+function matchesPhase(ataCode: string, interval: number): boolean {
+  return PHASE_MATCH[interval].some((pattern) => pattern.test(ataCode));
+}
+
+function isRetirementCandidate(itemType: string, disposition: string, description: string): boolean {
+  const haystack = `${itemType} ${disposition} ${description}`.toUpperCase();
+  return RETIREMENT_KEYWORDS.some((keyword) => haystack.includes(keyword));
+}
+
+function computeAverageUtilization(reportDateRaw: string, remainingHours: number): number {
+  const reportDate = new Date(reportDateRaw);
+  if (Number.isNaN(reportDate.getTime()) || remainingHours <= 0) {
+    return 3;
+  }
+
+  const now = new Date();
+  const elapsedDays = Math.max((now.getTime() - reportDate.getTime()) / (1000 * 60 * 60 * 24), 1);
+  const impliedUtilization = remainingHours / elapsedDays;
+  return Number.isFinite(impliedUtilization) && impliedUtilization > 0
+    ? Math.min(Math.max(impliedUtilization, 0.5), 8)
+    : 3;
+}
+
 export async function loadMaintenanceData(): Promise<MaintenanceDataResult> {
   const csvUrl = `${import.meta.env.BASE_URL}data/due-list.csv`;
-
-  console.log('Loading maintenance CSV from:', csvUrl);
-
   const response = await fetch(csvUrl, { cache: 'no-store' });
 
   if (!response.ok) {
@@ -47,162 +137,101 @@ export async function loadMaintenanceData(): Promise<MaintenanceDataResult> {
   }
 
   const csvText = await response.text();
-
   if (!csvText.trim()) {
     throw new Error('CSV file is empty');
   }
 
-  const parsed = Papa.parse<CsvRow>(csvText, {
-    header: true,
-    skipEmptyLines: true,
-  });
-
-  if (parsed.errors.length) {
-    console.warn('CSV parse errors:', parsed.errors);
-  }
-
-  const rows = parsed.data;
-  console.log('Parsed row count:', rows.length);
-  console.log('CSV headers:', Object.keys(rows[0] ?? {}));
-  console.log('First row:', rows[0]);
+  const rows = parseCsv(csvText);
 
   const aircraftMap = new Map<string, Aircraft>();
   const inspectionsMap = new Map<string, InspectionHours>();
   const componentsMap = new Map<string, AircraftComponents>();
 
   rows.forEach((row, index) => {
-    const registration = pick(row, [
-      'Registration',
-      'Aircraft',
-      'A/C',
-      'AC',
-      'Tail Number',
-      'Tail',
-      'Aircraft Registration',
-    ]);
+    const registration = cell(row, COL_REG);
+    if (!registration || registration.toLowerCase() === 'registration') return;
 
-    if (!registration) {
-      return;
-    }
+    const ataCode = cell(row, COL_ATA);
+    const description = cell(row, COL_DESC);
+    const itemType = cell(row, COL_ITEM_TYPE);
+    const disposition = cell(row, COL_DISPOSITION);
+    const remainingHours = toNumber(cell(row, COL_REM_HRS));
+    const totalTime = toNumber(cell(row, COL_AIRFRAME_HRS)) || toNumber(cell(row, COL_EQUIP_HRS));
 
-    const aircraftId = registration;
-
-    const totalTime = toNumber(
-      pick(row, [
-        'Total Time',
-        'TT',
-        'Airframe Time',
-        'Current Hours',
-        'Total Hours',
-      ])
-    );
-
-    const hoursUntil200Hr = toNumber(
-      pick(row, [
-        'Hours Until 200Hr',
-        '200 Hour',
-        '200 Hr',
-        '200HR',
-        '200 Hr Remaining',
-        'Hours Remaining',
-      ])
-    );
-
-    const averageUtilization = toNumber(
-      pick(row, [
-        'Average Utilization',
-        'Avg Utilization',
-        'Avg. Utilization',
-        'Avg Usage',
-        'Average Daily Hours',
-      ])
-    );
-
-    if (!aircraftMap.has(aircraftId)) {
-      aircraftMap.set(aircraftId, {
-        id: aircraftId,
+    if (!aircraftMap.has(registration)) {
+      const avgUtilization = computeAverageUtilization(cell(row, COL_AIRFRAME_RPT), remainingHours);
+      aircraftMap.set(registration, {
+        id: registration,
         registration,
         totalTime,
-        hoursUntil200Hr,
-        averageUtilization,
+        hoursUntil200Hr: Number.POSITIVE_INFINITY,
+        averageUtilization: avgUtilization,
         status: 'on-ground',
       });
     }
 
-    const inspectionName = pick(row, [
-      'Inspection',
-      'Inspection Name',
-      'Event',
-      'Requirement',
-    ]);
+    TARGET_INTERVALS.forEach((interval) => {
+      if (!matchesPhase(ataCode, interval)) return;
 
-    const inspectionHoursRemaining = toNumber(
-      pick(row, [
-        'Inspection Hours Remaining',
-        'Hours Remaining',
-        'Remaining Hours',
-        'Due In',
-      ])
-    );
-
-    if (inspectionName) {
-      if (!inspectionsMap.has(aircraftId)) {
-        inspectionsMap.set(aircraftId, {
-          aircraftId,
+      if (!inspectionsMap.has(registration)) {
+        inspectionsMap.set(registration, {
+          aircraftId: registration,
           registration,
           inspections: {},
         });
       }
 
-      inspectionsMap.get(aircraftId)!.inspections[inspectionName] = inspectionHoursRemaining;
-    }
+      const label = `${interval} Hr`;
+      const existing = inspectionsMap.get(registration)!.inspections[label];
+      if (existing === undefined || remainingHours < existing) {
+        inspectionsMap.get(registration)!.inspections[label] = remainingHours;
+      }
 
-    const componentName = pick(row, [
-      'Component',
-      'Component Name',
-      'Description',
-      'Part Description',
-      'Item',
-    ]);
+      const aircraft = aircraftMap.get(registration)!;
+      if (interval === 200 && remainingHours >= 0) {
+        aircraft.hoursUntil200Hr = Math.min(aircraft.hoursUntil200Hr, remainingHours);
+      }
+    });
 
-    const serialNumber = pick(row, [
-      'Serial Number',
-      'Serial',
-      'S/N',
-      'SN',
-    ]);
-
-    const componentHoursRemaining = toNumber(
-      pick(row, [
-        'Component Hours Remaining',
-        'Hours Remaining',
-        'Remaining Hours',
-        'Due In',
-      ])
-    );
-
-    if (componentName) {
-      if (!componentsMap.has(aircraftId)) {
-        componentsMap.set(aircraftId, {
-          aircraftId,
+    if (
+      isRetirementCandidate(itemType, disposition, description) &&
+      remainingHours > 0 &&
+      remainingHours <= COMPONENT_WINDOW_HRS
+    ) {
+      if (!componentsMap.has(registration)) {
+        componentsMap.set(registration, {
+          aircraftId: registration,
           registration,
           components: [],
         });
       }
 
+      const serialNumber = cell(row, 17) || 'N/A';
+      const intervalHours = toNumber(cell(row, COL_INTERVAL_HRS));
+      const status = cell(row, COL_STATUS);
+      const dueDateLabel = [cell(row, COL_REM_DAYS), cell(row, COL_REM_MONTHS)]
+        .filter(Boolean)
+        .join(' / ');
+
       const component: Component = {
-        id: makeComponentId(registration, componentName, serialNumber, index),
-        name: componentName,
+        id: makeComponentId(registration, description || ataCode || 'component', serialNumber, index),
+        name: description || ataCode || 'Component',
         serialNumber,
-        hoursRemaining: componentHoursRemaining,
+        hoursRemaining: remainingHours,
+        dueDate: dueDateLabel || status || (intervalHours ? `${intervalHours} hr interval` : undefined),
       };
 
-      componentsMap.get(aircraftId)!.components.push(component);
+      componentsMap.get(registration)!.components.push(component);
     }
   });
 
+  const aircraft = Array.from(aircraftMap.values()).map((entry) => ({
+    ...entry,
+    hoursUntil200Hr: Number.isFinite(entry.hoursUntil200Hr) ? entry.hoursUntil200Hr : 0,
+  }));
+
   return {
-    aircraft: Array.from(aircraftMap.values()),
+    aircraft,
     inspections: Array.from(inspectionsMap.values()),
     components: Array.from(componentsMap.values()),
   };
