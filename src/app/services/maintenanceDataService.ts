@@ -56,14 +56,45 @@ export interface FlightDocsRow {
  * Parse CSV data from FlightDocs export
  */
 export function parseFlightDocsCsv(csvText: string): FlightDocsRow[] {
-  const lines = csvText.trim().split('\n');
+  const lines = csvText
+    .trim()
+    .split('\n')
+    .map(line => line.replace(/\r$/, ''));
   if (lines.length === 0) return [];
 
-  const headers = lines[0].split(',').map(h => h.trim().toLowerCase());
+  const parseCsvLine = (line: string): string[] => {
+    const values: string[] = [];
+    let current = '';
+    let inQuotes = false;
+
+    for (let i = 0; i < line.length; i++) {
+      const char = line[i];
+      const nextChar = line[i + 1];
+
+      if (char === '"') {
+        if (inQuotes && nextChar === '"') {
+          current += '"';
+          i++;
+        } else {
+          inQuotes = !inQuotes;
+        }
+      } else if (char === ',' && !inQuotes) {
+        values.push(current.trim());
+        current = '';
+      } else {
+        current += char;
+      }
+    }
+
+    values.push(current.trim());
+    return values;
+  };
+
+  const headers = parseCsvLine(lines[0]).map(h => h.toLowerCase());
   const data: FlightDocsRow[] = [];
 
   for (let i = 1; i < lines.length; i++) {
-    const values = lines[i].split(',');
+    const values = parseCsvLine(lines[i]);
     if (values.length < headers.length) continue;
 
     const row: any = {};

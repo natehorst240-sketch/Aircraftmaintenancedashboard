@@ -176,9 +176,11 @@ export function filterByRegistrations(
   aircraft: ProcessedAircraftData[],
   registrations: string[]
 ): ProcessedAircraftData[] {
-  const upperRegistrations = registrations.map(r => r.trim().toUpperCase());
+  const normalize = (value: string) => value.replace(/[^A-Z0-9]/gi, '').toUpperCase();
+  const upperRegistrations = registrations.map(r => normalize(r.trim()));
+
   return aircraft.filter(ac => 
-    upperRegistrations.some(reg => ac.callsign.includes(reg))
+    upperRegistrations.some(reg => normalize(ac.callsign).includes(reg))
   );
 }
 
