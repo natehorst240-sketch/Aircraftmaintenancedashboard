@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { Card, CardContent } from "./ui/card";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
@@ -31,18 +31,57 @@ import {
 } from "lucide-react";
 import { Badge } from "./ui/badge";
 import { Tabs, TabsList, TabsTrigger } from "./ui/tabs";
-import type { CalendarEvent } from "../types/maintenance";
+import { CalendarEvent, Aircraft, InspectionHours } from "../data/mockData";
 import { useMaintenanceData } from "../hooks/useMaintenanceData";
 
 type ViewMode = "month" | "week" | "day";
 
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+function calculateDueDate(hoursRemaining: number, avgUtilization: number): string {
+  const days = Math.ceil(hoursRemaining / Math.max(avgUtilization, 0.1));
+  const d = new Date();
+  d.setDate(d.getDate() + days);
+  return d.toISOString().split("T")[0];
+}
+
+/** Build CalendarEvent list from real inspection data. */
+function buildEventsFromData(
+  aircraftList: Aircraft[],
+  inspectionsList: InspectionHours[]
+): CalendarEvent[] {
+  const events: CalendarEvent[] = [];
+  let idx = 0;
+
+  for (const inspData of inspectionsList) {
+    const acInfo = aircraftList.find((a) => a.id === inspData.aircraftId);
+    if (!acInfo) continue;
+
+    for (const [inspType, hours] of Object.entries(inspData.inspections)) {
+      events.push({
+        id: `gen-${++idx}`,
+        aircraftId: inspData.aircraftId,
+        registration: inspData.registration,
+        inspectionType: inspType,
+        dueDate: calculateDueDate(hours, acInfo.averageUtilization),
+        hoursRemaining: hours,
+      });
+    }
+  }
+
+  return events;
+}
+
+// ── Component ─────────────────────────────────────────────────────────────────
+
 export default function CalendarTab() {
+  const { aircraft, inspections } = useMaintenanceData();
+
   const [currentDate, setCurrentDate] = useState(new Date());
+  // Events start empty; populated/refreshed when real data arrives.
+  // User-created events have IDs prefixed with "custom-" and are preserved.
   const [events, setEvents] = useState<CalendarEvent[]>([]);
-  const { aircraft, inspections, isLoading, error } = useMaintenanceData();
-  const [selectedEvent, setSelectedEvent] = useState<CalendarEvent | null>(
-    null
-  );
+  const [selectedEvent, setSelectedEvent] = useState<CalendarEvent | null>(null);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [selectedAircraft, setSelectedAircraft] = useState<string>("all");
@@ -51,10 +90,7 @@ export default function CalendarTab() {
   const [draggedEvent, setDraggedEvent] = useState<CalendarEvent | null>(null);
   const [newEventDate, setNewEventDate] = useState<string>("");
 
-  const [editForm, setEditForm] = useState({
-    dueDate: "",
-    notes: "",
-  });
+  const [editForm, setEditForm] = useState({ dueDate: "", notes: "" });
 
   const [createForm, setCreateForm] = useState({
     aircraftId: "",
@@ -65,39 +101,27 @@ export default function CalendarTab() {
     notes: "",
   });
 
-  // Get unique inspection types
-  const inspectionTypes = ["50 Hr", "100 Hr", "200 Hr", "400 Hr", "800 Hr", "2400 Hr", "3200 Hr"];
-
+  // Rebuild generated events whenever real data changes, keeping user events intact
   useEffect(() => {
-    const generated = inspections.flatMap((entry) =>
-      Object.entries(entry.inspections).map(([inspectionType, hoursRemaining]) => {
-        const aircraftInfo = aircraft.find((a) => a.id === entry.aircraftId);
-        const utilization = aircraftInfo?.averageUtilization || 3;
-        const dueDate = new Date();
-        dueDate.setDate(dueDate.getDate() + Math.max(1, Math.ceil(hoursRemaining / utilization)));
-
-        return {
-          id: `${entry.aircraftId}-${inspectionType}`,
-          aircraftId: entry.aircraftId,
-          registration: entry.registration,
-          inspectionType,
-          dueDate: dueDate.toISOString().split("T")[0],
-          hoursRemaining,
-          notes: "Auto-generated from CSV remaining hours",
-        } as CalendarEvent;
-      })
-    );
-
-    setEvents(generated);
+    const generated = buildEventsFromData(aircraft, inspections);
+    setEvents((prev) => {
+      const userEvents = prev.filter((e) => e.id.startsWith("custom-"));
+      return [...generated, ...userEvents];
+    });
   }, [aircraft, inspections]);
+
+  // Derived inspection types from whatever events are loaded
+  const inspectionTypes = useMemo(() => {
+    const types = new Set(events.map((e) => e.inspectionType));
+    return Array.from(types).sort();
+  }, [events]);
 
   // Filter events based on selected filters
   const filteredEvents = events.filter((event) => {
     const matchesAircraft =
       selectedAircraft === "all" || event.aircraftId === selectedAircraft;
     const matchesInspection =
-      selectedInspection === "all" ||
-      event.inspectionType === selectedInspection;
+      selectedInspection === "all" || event.inspectionType === selectedInspection;
     return matchesAircraft && matchesInspection;
   });
 
@@ -106,11 +130,7 @@ export default function CalendarTab() {
     if (viewMode === "month") {
       return {
         start: new Date(currentDate.getFullYear(), currentDate.getMonth(), 1),
-        end: new Date(
-          currentDate.getFullYear(),
-          currentDate.getMonth() + 1,
-          0
-        ),
+        end: new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0),
       };
     } else if (viewMode === "week") {
       const day = currentDate.getDay();
@@ -123,7 +143,6 @@ export default function CalendarTab() {
       end.setHours(23, 59, 59, 999);
       return { start, end };
     } else {
-      // day view
       const start = new Date(currentDate);
       start.setHours(0, 0, 0, 0);
       const end = new Date(currentDate);
@@ -134,38 +153,25 @@ export default function CalendarTab() {
 
   const goToPrevious = () => {
     const newDate = new Date(currentDate);
-    if (viewMode === "month") {
-      newDate.setMonth(newDate.getMonth() - 1);
-    } else if (viewMode === "week") {
-      newDate.setDate(newDate.getDate() - 7);
-    } else {
-      newDate.setDate(newDate.getDate() - 1);
-    }
+    if (viewMode === "month") newDate.setMonth(newDate.getMonth() - 1);
+    else if (viewMode === "week") newDate.setDate(newDate.getDate() - 7);
+    else newDate.setDate(newDate.getDate() - 1);
     setCurrentDate(newDate);
   };
 
   const goToNext = () => {
     const newDate = new Date(currentDate);
-    if (viewMode === "month") {
-      newDate.setMonth(newDate.getMonth() + 1);
-    } else if (viewMode === "week") {
-      newDate.setDate(newDate.getDate() + 7);
-    } else {
-      newDate.setDate(newDate.getDate() + 1);
-    }
+    if (viewMode === "month") newDate.setMonth(newDate.getMonth() + 1);
+    else if (viewMode === "week") newDate.setDate(newDate.getDate() + 7);
+    else newDate.setDate(newDate.getDate() + 1);
     setCurrentDate(newDate);
   };
 
-  const goToToday = () => {
-    setCurrentDate(new Date());
-  };
+  const goToToday = () => setCurrentDate(new Date());
 
   const handleEventClick = (event: CalendarEvent) => {
     setSelectedEvent(event);
-    setEditForm({
-      dueDate: event.dueDate,
-      notes: event.notes || "",
-    });
+    setEditForm({ dueDate: event.dueDate, notes: event.notes || "" });
     setIsEditDialogOpen(true);
   };
 
@@ -183,14 +189,13 @@ export default function CalendarTab() {
   };
 
   const handleSaveCreate = () => {
-    const selectedAircraftData = aircraft.find((a) => a.id === createForm.aircraftId);
-    if (!selectedAircraftData || !createForm.inspectionType || !createForm.dueDate)
-      return;
+    const acInfo = aircraft.find((a) => a.id === createForm.aircraftId);
+    if (!acInfo || !createForm.inspectionType || !createForm.dueDate) return;
 
     const newEvent: CalendarEvent = {
-      id: `E${Date.now()}`,
+      id: `custom-${Date.now()}`,
       aircraftId: createForm.aircraftId,
-      registration: selectedAircraftData.registration,
+      registration: acInfo.registration,
       inspectionType: createForm.inspectionType,
       dueDate: createForm.dueDate,
       hoursRemaining: parseInt(createForm.hoursRemaining) || 0,
@@ -203,15 +208,10 @@ export default function CalendarTab() {
 
   const handleSaveEdit = () => {
     if (!selectedEvent) return;
-
     setEvents((prev) =>
       prev.map((e) =>
         e.id === selectedEvent.id
-          ? {
-              ...e,
-              dueDate: editForm.dueDate,
-              notes: editForm.notes,
-            }
+          ? { ...e, dueDate: editForm.dueDate, notes: editForm.notes }
           : e
       )
     );
@@ -221,27 +221,18 @@ export default function CalendarTab() {
 
   const handleDeleteEvent = () => {
     if (!selectedEvent) return;
-
     setEvents((prev) => prev.filter((e) => e.id !== selectedEvent.id));
     setIsEditDialogOpen(false);
     setSelectedEvent(null);
   };
 
-  const handleDragStart = (event: CalendarEvent) => {
-    setDraggedEvent(event);
-  };
-
-  const handleDragOver = (e: React.DragEvent) => {
-    e.preventDefault();
-  };
+  const handleDragStart = (event: CalendarEvent) => setDraggedEvent(event);
+  const handleDragOver = (e: React.DragEvent) => e.preventDefault();
 
   const handleDrop = (date: string) => {
     if (!draggedEvent) return;
-
     setEvents((prev) =>
-      prev.map((e) =>
-        e.id === draggedEvent.id ? { ...e, dueDate: date } : e
-      )
+      prev.map((e) => (e.id === draggedEvent.id ? { ...e, dueDate: date } : e))
     );
     setDraggedEvent(null);
   };
@@ -290,11 +281,10 @@ export default function CalendarTab() {
     selectedAircraft !== "all" || selectedInspection !== "all";
 
   const getEventColor = (event: CalendarEvent) => {
-    if (event.hoursRemaining <= 50) {
+    if (event.hoursRemaining <= 50)
       return "bg-red-500 hover:bg-red-600 border-red-600";
-    } else if (event.hoursRemaining <= 100) {
+    if (event.hoursRemaining <= 100)
       return "bg-amber-500 hover:bg-amber-600 border-amber-600";
-    }
     return "bg-blue-500 hover:bg-blue-600 border-blue-600";
   };
 
@@ -336,7 +326,10 @@ export default function CalendarTab() {
             </div>
 
             {/* Right side - View modes */}
-            <Tabs value={viewMode} onValueChange={(v) => setViewMode(v as ViewMode)}>
+            <Tabs
+              value={viewMode}
+              onValueChange={(v) => setViewMode(v as ViewMode)}
+            >
               <TabsList>
                 <TabsTrigger value="month" className="gap-2">
                   <Grid3x3 className="w-4 h-4" />
@@ -370,9 +363,9 @@ export default function CalendarTab() {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Aircraft</SelectItem>
-                {aircraft.map((aircraft) => (
-                  <SelectItem key={aircraft.id} value={aircraft.id}>
-                    {aircraft.registration}
+                {aircraft.map((ac) => (
+                  <SelectItem key={ac.id} value={ac.id}>
+                    {ac.registration}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -467,11 +460,11 @@ export default function CalendarTab() {
               <Select
                 value={createForm.aircraftId}
                 onValueChange={(value) => {
-                  const selected = aircraft.find((a) => a.id === value);
+                  const acInfo = aircraft.find((a) => a.id === value);
                   setCreateForm({
                     ...createForm,
                     aircraftId: value,
-                    registration: selected?.registration || "",
+                    registration: acInfo?.registration || "",
                   });
                 }}
               >
@@ -479,9 +472,9 @@ export default function CalendarTab() {
                   <SelectValue placeholder="Select aircraft" />
                 </SelectTrigger>
                 <SelectContent>
-                  {aircraft.map((aircraft) => (
-                    <SelectItem key={aircraft.id} value={aircraft.id}>
-                      {aircraft.registration}
+                  {aircraft.map((ac) => (
+                    <SelectItem key={ac.id} value={ac.id}>
+                      {ac.registration}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -638,7 +631,8 @@ export default function CalendarTab() {
   );
 }
 
-// Month View Component
+// ── Month View ─────────────────────────────────────────────────────────────────
+
 function MonthView({
   currentDate,
   events,
@@ -679,21 +673,15 @@ function MonthView({
     fullDate: Date;
   }> = [];
 
-  // Previous month days
   for (let i = 0; i < firstDayOfWeek; i++) {
     const prevMonthDate = new Date(
       currentDate.getFullYear(),
       currentDate.getMonth(),
       -firstDayOfWeek + i + 1
     );
-    days.push({
-      date: prevMonthDate.getDate(),
-      isCurrentMonth: false,
-      fullDate: prevMonthDate,
-    });
+    days.push({ date: prevMonthDate.getDate(), isCurrentMonth: false, fullDate: prevMonthDate });
   }
 
-  // Current month days
   for (let i = 1; i <= daysInMonth; i++) {
     days.push({
       date: i,
@@ -702,7 +690,6 @@ function MonthView({
     });
   }
 
-  // Next month days
   const remainingCells = 42 - days.length;
   for (let i = 1; i <= remainingCells; i++) {
     const nextMonthDate = new Date(
@@ -710,11 +697,7 @@ function MonthView({
       currentDate.getMonth() + 1,
       i
     );
-    days.push({
-      date: i,
-      isCurrentMonth: false,
-      fullDate: nextMonthDate,
-    });
+    days.push({ date: i, isCurrentMonth: false, fullDate: nextMonthDate });
   }
 
   const getEventsForDate = (date: Date) => {
@@ -728,7 +711,6 @@ function MonthView({
     <Card>
       <CardContent className="p-0">
         <div className="border border-slate-200 rounded-lg overflow-hidden">
-          {/* Week day headers */}
           <div className="grid grid-cols-7 bg-slate-50 border-b border-slate-200">
             {weekDays.map((day) => (
               <div
@@ -740,7 +722,6 @@ function MonthView({
             ))}
           </div>
 
-          {/* Calendar days */}
           <div className="grid grid-cols-7">
             {days.map((day, index) => {
               const dayEvents = getEventsForDate(day.fullDate);
@@ -815,7 +796,8 @@ function MonthView({
   );
 }
 
-// Week View Component
+// ── Week View ──────────────────────────────────────────────────────────────────
+
 function WeekView({
   currentDate,
   events,
@@ -922,7 +904,8 @@ function WeekView({
   );
 }
 
-// Day View Component
+// ── Day View ───────────────────────────────────────────────────────────────────
+
 function DayView({
   currentDate,
   events,
