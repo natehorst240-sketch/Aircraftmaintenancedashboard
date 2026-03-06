@@ -9,36 +9,46 @@ import {
 } from "./ui/tooltip";
 import { Input } from "./ui/input";
 import { Search, AlertTriangle, Clock } from "lucide-react";
-import { componentsData, aircraftData } from "../data/mockData";
+import { useMaintenanceData } from "../hooks/useMaintenanceData";
 
 export default function ComponentsTab() {
   const [searchTerm, setSearchTerm] = useState("");
+  const { aircraft, components, isUsingMockData } = useMaintenanceData();
 
   // Filter components by search term
-  const filteredData = componentsData
-    .map((aircraft) => ({
-      ...aircraft,
-      components: aircraft.components.filter(
+  const filteredData = components
+    .map((ac) => ({
+      ...ac,
+      components: ac.components.filter(
         (component) =>
           component.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
           component.serialNumber
             .toLowerCase()
             .includes(searchTerm.toLowerCase()) ||
-          aircraft.registration
+          ac.registration
             .toLowerCase()
             .includes(searchTerm.toLowerCase())
       ),
     }))
-    .filter((aircraft) => aircraft.components.length > 0);
+    .filter((ac) => ac.components.length > 0);
 
   const getStatusColor = (hours: number) => {
-    if (hours <= 25) return "border-red-500 bg-red-50";
-    if (hours <= 75) return "border-amber-500 bg-amber-50";
+    if (hours <= 0)   return "border-red-600 bg-red-100";
+    if (hours <= 25)  return "border-red-500 bg-red-50";
+    if (hours <= 75)  return "border-amber-500 bg-amber-50";
     if (hours <= 150) return "border-blue-500 bg-blue-50";
     return "border-green-500 bg-green-50";
   };
 
   const getStatusBadge = (hours: number) => {
+    if (hours <= 0) {
+      return (
+        <Badge variant="destructive" className="gap-1">
+          <AlertTriangle className="w-3 h-3" />
+          Past Due
+        </Badge>
+      );
+    }
     if (hours <= 25) {
       return (
         <Badge variant="destructive" className="gap-1">
@@ -78,7 +88,9 @@ export default function ComponentsTab() {
             Components Due in Next 200 Hours
           </h2>
           <p className="text-sm text-slate-500 mt-1">
-            Hover over cards for detailed information
+            {isUsingMockData
+              ? "Showing demo data — CSV not loaded"
+              : "Retirement / overhaul items within 200 flight hours"}
           </p>
         </div>
         <div className="w-80">
@@ -98,18 +110,19 @@ export default function ComponentsTab() {
       {/* Aircraft Component Cards - 3 per row */}
       <TooltipProvider>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {filteredData.map((aircraft) => {
-            const aircraftInfo = aircraftData.find(
-              (a) => a.id === aircraft.aircraftId
-            );
+          {filteredData.map((ac) => {
+            const aircraftInfo = aircraft.find((a) => a.id === ac.aircraftId);
 
-            // Sort components by hours remaining
-            const sortedComponents = [...aircraft.components].sort(
+            // Sort components by hours remaining (past-due / lowest first)
+            const sortedComponents = [...ac.components].sort(
               (a, b) => a.hoursRemaining - b.hoursRemaining
             );
 
+            const pastDueCount = sortedComponents.filter(
+              (c) => c.hoursRemaining <= 0
+            ).length;
             const criticalCount = sortedComponents.filter(
-              (c) => c.hoursRemaining <= 25
+              (c) => c.hoursRemaining > 0 && c.hoursRemaining <= 25
             ).length;
             const warningCount = sortedComponents.filter(
               (c) => c.hoursRemaining > 25 && c.hoursRemaining <= 75
@@ -117,21 +130,26 @@ export default function ComponentsTab() {
 
             return (
               <Card
-                key={aircraft.aircraftId}
+                key={ac.aircraftId}
                 className="hover:shadow-lg transition-shadow"
               >
                 <CardHeader className="pb-4">
                   <div className="flex items-start justify-between">
                     <div>
                       <CardTitle className="text-xl">
-                        {aircraft.registration}
+                        {ac.registration}
                       </CardTitle>
                       <p className="text-sm text-slate-500 mt-1">
-                        {aircraft.components.length} component
-                        {aircraft.components.length !== 1 ? "s" : ""} due
+                        {ac.components.length} component
+                        {ac.components.length !== 1 ? "s" : ""} due
                       </p>
                     </div>
                     <div className="flex flex-col gap-1">
+                      {pastDueCount > 0 && (
+                        <Badge variant="destructive" className="text-xs">
+                          {pastDueCount} Past Due
+                        </Badge>
+                      )}
                       {criticalCount > 0 && (
                         <Badge variant="destructive" className="text-xs">
                           {criticalCount} Critical
@@ -148,12 +166,13 @@ export default function ComponentsTab() {
                 <CardContent>
                   <div className="space-y-2">
                     {sortedComponents.map((component) => {
-                      const estimatedDays = aircraftInfo
-                        ? Math.ceil(
-                            component.hoursRemaining /
-                              aircraftInfo.averageUtilization
-                          )
-                        : 0;
+                      const estimatedDays =
+                        aircraftInfo && aircraftInfo.averageUtilization > 0
+                          ? Math.ceil(
+                              component.hoursRemaining /
+                                aircraftInfo.averageUtilization
+                            )
+                          : null;
 
                       return (
                         <Tooltip key={component.id} delayDuration={200}>
@@ -165,11 +184,13 @@ export default function ComponentsTab() {
                             >
                               <div className="flex items-start justify-between gap-2">
                                 <div className="flex-1 min-w-0">
-                                  <div className="font-medium text-slate-900 truncate">
+                                  <div className="font-medium text-slate-900 truncate text-sm">
                                     {component.name}
                                   </div>
                                   <div className="text-xs text-slate-600 mt-0.5">
-                                    {component.hoursRemaining} hrs remaining
+                                    {component.hoursRemaining <= 0
+                                      ? `${Math.abs(component.hoursRemaining).toFixed(1)} hrs past due`
+                                      : `${component.hoursRemaining.toFixed(1)} hrs remaining`}
                                   </div>
                                 </div>
                                 {getStatusBadge(component.hoursRemaining)}
@@ -192,47 +213,31 @@ export default function ComponentsTab() {
                               </div>
                               <div className="border-t border-slate-200 pt-2 space-y-1">
                                 <div className="flex justify-between text-xs">
-                                  <span className="text-slate-600">
-                                    Aircraft:
-                                  </span>
-                                  <span className="font-medium">
-                                    {aircraft.registration}
-                                  </span>
+                                  <span className="text-slate-600">Aircraft:</span>
+                                  <span className="font-medium">{ac.registration}</span>
                                 </div>
                                 <div className="flex justify-between text-xs">
-                                  <span className="text-slate-600">
-                                    Hours Remaining:
-                                  </span>
+                                  <span className="text-slate-600">Hours Remaining:</span>
                                   <span className="font-medium">
-                                    {component.hoursRemaining} hrs
+                                    {component.hoursRemaining.toFixed(1)} hrs
                                   </span>
                                 </div>
+                                {component.dueDate && (
+                                  <div className="flex justify-between text-xs">
+                                    <span className="text-slate-600">Next Due Date:</span>
+                                    <span className="font-medium">{component.dueDate}</span>
+                                  </div>
+                                )}
+                                {estimatedDays !== null && (
+                                  <div className="flex justify-between text-xs">
+                                    <span className="text-slate-600">Est. Days:</span>
+                                    <span className="font-medium">~{estimatedDays} days</span>
+                                  </div>
+                                )}
                                 <div className="flex justify-between text-xs">
-                                  <span className="text-slate-600">
-                                    Estimated Days:
-                                  </span>
+                                  <span className="text-slate-600">Total Time:</span>
                                   <span className="font-medium">
-                                    ~{estimatedDays} days
-                                  </span>
-                                </div>
-                                <div className="flex justify-between text-xs">
-                                  <span className="text-slate-600">
-                                    Utilization:
-                                  </span>
-                                  <span className="font-medium">
-                                    {aircraftInfo?.averageUtilization.toFixed(
-                                      1
-                                    )}{" "}
-                                    hrs/day
-                                  </span>
-                                </div>
-                                <div className="flex justify-between text-xs">
-                                  <span className="text-slate-600">
-                                    Total Time:
-                                  </span>
-                                  <span className="font-medium">
-                                    {aircraftInfo?.totalTime.toLocaleString()}{" "}
-                                    hrs
+                                    {aircraftInfo?.totalTime.toLocaleString()} hrs
                                   </span>
                                 </div>
                               </div>
@@ -273,10 +278,14 @@ export default function ComponentsTab() {
           <CardContent className="flex flex-col items-center justify-center py-16">
             <Search className="w-16 h-16 text-slate-300 mb-4" />
             <h3 className="text-lg font-medium text-slate-900 mb-2">
-              No components found
+              {searchTerm
+                ? "No components found"
+                : "No components due within 200 hours"}
             </h3>
             <p className="text-sm text-slate-500">
-              Try adjusting your search terms
+              {searchTerm
+                ? "Try adjusting your search terms"
+                : "All retirement and overhaul items are beyond the 200-hour window"}
             </p>
           </CardContent>
         </Card>

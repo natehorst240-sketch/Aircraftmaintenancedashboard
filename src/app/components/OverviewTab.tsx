@@ -1,4 +1,3 @@
-import { useState } from "react";
 import {
   BarChart,
   Bar,
@@ -19,12 +18,15 @@ import {
   TableRow,
 } from "./ui/table";
 import { Badge } from "./ui/badge";
-import { aircraftData, inspectionHoursData } from "../data/mockData";
 import { AlertTriangle, TrendingUp, Clock, Plane } from "lucide-react";
+import { useMaintenanceData } from "../hooks/useMaintenanceData";
+import { PHASE_INSPECTION_TYPES } from "../services/maintenanceDataService";
 
 export default function OverviewTab() {
+  const { aircraft, inspections, isUsingMockData } = useMaintenanceData();
+
   // Sort aircraft by hours until 200hr (least to most)
-  const sortedAircraft = [...aircraftData].sort(
+  const sortedAircraft = [...aircraft].sort(
     (a, b) => a.hoursUntil200Hr - b.hoursUntil200Hr
   );
 
@@ -56,17 +58,15 @@ export default function OverviewTab() {
     return <Badge variant="outline" className="text-green-600 border-green-600">Good</Badge>;
   };
 
-  // All inspection types
-  const inspectionTypes = [
-    "Annual Inspection",
-    "100 Hour",
-    "Transponder Check",
-    "ELT Inspection",
-    "Pitot-Static",
-  ];
-
   return (
     <div className="space-y-6">
+      {/* Mock data notice */}
+      {isUsingMockData && (
+        <div className="rounded-md bg-amber-50 border border-amber-200 px-4 py-3 text-sm text-amber-800">
+          Showing demo data — CSV not loaded. Run the FlightDocs scraper to populate live data.
+        </div>
+      )}
+
       {/* Summary Cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <Card>
@@ -76,7 +76,7 @@ export default function OverviewTab() {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-semibold">{aircraftData.length}</div>
+            <div className="text-3xl font-semibold">{aircraft.length}</div>
             <p className="text-sm text-slate-500 mt-1">Active in fleet</p>
           </CardContent>
         </Card>
@@ -103,10 +103,12 @@ export default function OverviewTab() {
           </CardHeader>
           <CardContent>
             <div className="text-3xl font-semibold flex items-baseline gap-2">
-              {(
-                aircraftData.reduce((sum, a) => sum + a.averageUtilization, 0) /
-                aircraftData.length
-              ).toFixed(1)}
+              {aircraft.length > 0
+                ? (
+                    aircraft.reduce((sum, a) => sum + a.averageUtilization, 0) /
+                    aircraft.length
+                  ).toFixed(1)
+                : "—"}
               <span className="text-sm text-slate-500 font-normal">hrs/day</span>
             </div>
             <div className="flex items-center gap-1 mt-1 text-green-600 text-sm">
@@ -122,30 +124,30 @@ export default function OverviewTab() {
         <CardHeader>
           <CardTitle>Aircraft Utilization</CardTitle>
           <p className="text-sm text-slate-500 mt-1">
-            Average hours flown per day by aircraft
+            Total airframe hours by aircraft
           </p>
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4">
-            {aircraftData.map((aircraft) => (
+            {aircraft.map((ac) => (
               <div
-                key={aircraft.id}
+                key={ac.id}
                 className="border border-slate-200 rounded-lg p-4 hover:border-blue-300 transition-colors"
               >
                 <div className="flex items-center gap-2 mb-2">
                   <Plane className="w-4 h-4 text-blue-600" />
                   <span className="font-semibold text-slate-900">
-                    {aircraft.registration}
+                    {ac.registration}
                   </span>
                 </div>
                 <div className="text-2xl font-semibold text-blue-600">
-                  {aircraft.averageUtilization.toFixed(1)}
+                  {ac.averageUtilization.toFixed(1)}
                 </div>
                 <div className="text-xs text-slate-500">hrs/day</div>
                 <div className="mt-2 pt-2 border-t border-slate-100">
                   <div className="text-xs text-slate-500">Total Time</div>
                   <div className="text-sm font-medium">
-                    {aircraft.totalTime.toLocaleString()} hrs
+                    {ac.totalTime.toLocaleString()} hrs
                   </div>
                 </div>
               </div>
@@ -191,14 +193,14 @@ export default function OverviewTab() {
                 }}
                 formatter={(value: number) => [`${value} hours`, "Hours Remaining"]}
               />
-              <Bar 
-                dataKey="hoursUntil200Hr" 
+              <Bar
+                dataKey="hoursUntil200Hr"
                 radius={[8, 8, 0, 0]}
               >
                 {sortedAircraft.map((entry, idx) => (
-                  <Cell 
-                    key={`bar-cell-${idx}`} 
-                    fill={getBarColor(entry.hoursUntil200Hr)} 
+                  <Cell
+                    key={`bar-cell-${idx}`}
+                    fill={getBarColor(entry.hoursUntil200Hr)}
                   />
                 ))}
               </Bar>
@@ -207,12 +209,12 @@ export default function OverviewTab() {
         </CardContent>
       </Card>
 
-      {/* Inspection Hours Table */}
+      {/* Phase Inspection Hours Table */}
       <Card>
         <CardHeader>
-          <CardTitle>Inspection Hours Remaining</CardTitle>
+          <CardTitle>Phase Inspection Hours Remaining</CardTitle>
           <p className="text-sm text-slate-500 mt-1">
-            All scheduled inspections across the fleet
+            All scheduled phase inspections across the fleet
           </p>
         </CardHeader>
         <CardContent>
@@ -222,35 +224,37 @@ export default function OverviewTab() {
                 <TableRow>
                   <TableHead className="w-32">Aircraft</TableHead>
                   <TableHead className="w-24">Status</TableHead>
-                  {inspectionTypes.map((type) => (
-                    <TableHead key={type} className="text-right min-w-32">
+                  {PHASE_INSPECTION_TYPES.map((type) => (
+                    <TableHead key={type} className="text-right min-w-28">
                       {type}
                     </TableHead>
                   ))}
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {inspectionHoursData.map((aircraft) => {
-                  const aircraftInfo = aircraftData.find(
-                    (a) => a.id === aircraft.aircraftId
-                  );
-                  const minHours = Math.min(
-                    ...Object.values(aircraft.inspections)
-                  );
+                {inspections.map((ac) => {
+                  const values = PHASE_INSPECTION_TYPES.map(
+                    (t) => ac.inspections[t]
+                  ).filter((v): v is number => v !== undefined);
+                  const minHours = values.length > 0 ? Math.min(...values) : Infinity;
 
                   return (
-                    <TableRow key={aircraft.aircraftId}>
+                    <TableRow key={ac.aircraftId}>
                       <TableCell className="font-medium">
-                        {aircraft.registration}
+                        {ac.registration}
                       </TableCell>
                       <TableCell>{getInspectionBadge(minHours)}</TableCell>
-                      {inspectionTypes.map((type) => {
-                        const hours = aircraft.inspections[type] || 0;
+                      {PHASE_INSPECTION_TYPES.map((type) => {
+                        const hours = ac.inspections[type];
+                        if (hours === undefined) {
+                          return (
+                            <TableCell key={type} className="text-right text-slate-400 text-xs">
+                              —
+                            </TableCell>
+                          );
+                        }
                         return (
-                          <TableCell
-                            key={type}
-                            className="text-right"
-                          >
+                          <TableCell key={type} className="text-right">
                             <span
                               className={`font-medium ${
                                 hours <= 50
@@ -260,7 +264,7 @@ export default function OverviewTab() {
                                   : "text-slate-900"
                               }`}
                             >
-                              {hours}
+                              {hours.toFixed(1)}
                             </span>
                             <span className="text-xs text-slate-500 ml-1">hrs</span>
                           </TableCell>
