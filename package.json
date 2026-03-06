@@ -4,8 +4,10 @@
   "version": "0.0.1",
   "type": "module",
   "scripts": {
-    "build": "node ./node_modules/vite/bin/vite.js build",
-    "dev": "node ./node_modules/vite/bin/vite.js"
+    "build": "NODE_PATH=./node_modules/vite/node_modules node ./node_modules/vite/bin/vite.js build",
+    "dev": "NODE_PATH=./node_modules/vite/node_modules node ./node_modules/vite/bin/vite.js",
+    "prebuild": "node ./scripts/ensure-optional-native-deps.cjs",
+    "predev": "node ./scripts/ensure-optional-native-deps.cjs"
   },
   "dependencies": {
     "@popperjs/core": "2.11.8",
