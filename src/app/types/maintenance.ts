@@ -1,26 +1,51 @@
 export interface Aircraft {
   id: string;
-  tailNumber: string;
-  model: string;
-  status: string;
-  totalHours: number;
-  nextInspection: string;
+  registration: string;
+  totalTime: number;
+  hoursUntil200Hr: number;
+  averageUtilization: number;
+  location?: AircraftLocation;
+  status: "in-flight" | "on-ground" | "maintenance";
+  isLive?: boolean;
+}
+
+export interface AircraftLocation {
+  latitude: number;
+  longitude: number;
+  altitude: number;
+  heading: number;
+  speed: number;
+  lastUpdate: string;
 }
 
 export interface InspectionHours {
   aircraftId: string;
-  inspectionType: string;
+  registration: string;
+  inspections: {
+    [key: string]: number;
+  };
+}
+
+export interface Component {
+  id: string;
+  name: string;
+  serialNumber: string;
   hoursRemaining: number;
-  dueAtHours: number;
-  currentHours: number;
-  status: string;
+  dueDate?: string;
 }
 
 export interface AircraftComponents {
   aircraftId: string;
-  componentName: string;
-  partNumber: string;
-  serialNumber: string;
+  registration: string;
+  components: Component[];
+}
+
+export interface CalendarEvent {
+  id: string;
+  aircraftId: string;
+  registration: string;
+  inspectionType: string;
+  dueDate: string;
   hoursRemaining: number;
-  status: string;
+  notes?: string;
 }
