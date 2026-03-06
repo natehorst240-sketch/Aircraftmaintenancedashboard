@@ -5,13 +5,13 @@
   "type": "module",
   "scripts": {
     "build": "vite build",
-    "dev": "vite"
+    "dev": "npm run dev:check && vite",
+    "doctor:react": "node -e \"try{console.log('react:',require.resolve('react/package.json'));console.log('react-dom:',require.resolve('react-dom/package.json'));}catch(e){console.error('React dependencies are missing or corrupted. Run: npm run deps:reset');process.exit(1)}\"",
+    "doctor:vite": "node -e \"try{const v=require('vite/package.json').version;console.log('vite:',v)}catch(e){console.error('Vite is missing. Run: npm run deps:reset');process.exit(1)}\"",
+    "deps:reset": "node ./scripts/reset-deps.mjs",
+    "dev:check": "npm run doctor:react && npm run doctor:vite"
   },
   "dependencies": {
-    "@emotion/react": "11.14.0",
-    "@emotion/styled": "11.14.1",
-    "@mui/icons-material": "7.3.5",
-    "@mui/material": "7.3.5",
     "@popperjs/core": "2.11.8",
     "@radix-ui/react-accordion": "1.2.3",
     "@radix-ui/react-alert-dialog": "1.1.6",
@@ -74,18 +74,6 @@
     "@vitejs/plugin-react": "4.7.0",
     "tailwindcss": "4.1.12",
     "vite": "7.3.1"
-  },
-  "peerDependencies": {
-    "react": "18.3.1",
-    "react-dom": "18.3.1"
-  },
-  "peerDependenciesMeta": {
-    "react": {
-      "optional": true
-    },
-    "react-dom": {
-      "optional": true
-    }
   },
   "pnpm": {
     "overrides": {
