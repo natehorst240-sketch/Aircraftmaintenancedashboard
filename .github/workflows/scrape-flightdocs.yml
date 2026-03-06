@@ -1,0 +1,49 @@
+name: FlightDocs Daily Sync
+
+on:
+  schedule:
+    # Runs daily at 02:00 UTC
+    - cron: "0 2 * * *"
+  workflow_dispatch:
+
+jobs:
+  scrape-and-commit:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Run FlightDocs scraper
+        env:
+          FLIGHTDOCS_USERNAME: ${{ secrets.FLIGHTDOCS_USERNAME }}
+          FLIGHTDOCS_PASSWORD: ${{ secrets.FLIGHTDOCS_PASSWORD }}
+        run: node src/imports/flightdocs-scraper.ts
+
+      - name: Commit updated CSV (if changed)
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add public/data/due-list.csv
+
+          if git diff --cached --quiet; then
+            echo "No changes to commit"
+            exit 0
+          fi
+
+          git commit -m "chore(data): update FlightDocs due-list CSV"
+          git push
