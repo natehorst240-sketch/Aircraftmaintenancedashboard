@@ -39,7 +39,11 @@
  *      Create .github/workflows/scrape-flightdocs.yml with scheduled workflow
  */
 
-import { Aircraft, InspectionHours, Component } from '../data/mockData';
+import type {
+  Aircraft,
+  InspectionHours,
+  AircraftComponents,
+} from '../types/maintenance';
 
 export interface FlightDocsRow {
   aircraft: string;
