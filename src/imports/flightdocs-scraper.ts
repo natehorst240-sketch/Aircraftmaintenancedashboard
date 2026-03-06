@@ -4,7 +4,8 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
 import process from 'node:process';
-import { chromium, type Download, type Locator, type Page } from 'playwright';
+import { chromium } from 'playwright';
+import type { Download, Locator, Page } from 'playwright';
 import XLSX from 'xlsx';
 
 const LOGIN_URL: string =
