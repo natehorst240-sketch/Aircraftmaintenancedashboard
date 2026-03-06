@@ -50,6 +50,51 @@ interface MaintenanceDataResult {
   components: AircraftComponents[];
 }
 
+const CSV_HEADER_KEY = 'Registration Number';
+
+function looksLikeCsv(text: string): boolean {
+  const firstLine = text.split(/\r?\n/, 1)[0]?.replace(/^\uFEFF/, '').trim() ?? '';
+  return firstLine.includes(CSV_HEADER_KEY);
+}
+
+async function fetchDueListCsv(): Promise<string> {
+  const baseUrl = import.meta.env.BASE_URL || '/';
+  const candidates = Array.from(
+    new Set([
+      `${baseUrl}data/due-list.csv`,
+      '/data/due-list.csv',
+    ])
+  );
+
+  let lastError: Error | null = null;
+
+  for (const url of candidates) {
+    try {
+      const response = await fetch(url, { cache: 'no-store' });
+
+      if (!response.ok) {
+        throw new Error(`Failed to fetch CSV from ${url}: ${response.status} ${response.statusText}`);
+      }
+
+      const csvText = await response.text();
+
+      if (!csvText.trim()) {
+        throw new Error(`CSV response from ${url} was empty`);
+      }
+
+      if (!looksLikeCsv(csvText)) {
+        throw new Error(`Response from ${url} was not CSV data`);
+      }
+
+      return csvText;
+    } catch (error) {
+      lastError = error instanceof Error ? error : new Error(String(error));
+    }
+  }
+
+  throw lastError ?? new Error('Failed to fetch due-list CSV from all known URLs');
+}
+
 const TARGET_INTERVALS = [50, 100, 200, 400, 800, 2400, 3200] as const;
 
 const PHASE_MATCH: Record<number, RegExp[]> = {
@@ -129,14 +174,7 @@ function computeAverageUtilization(reportDateRaw: string, remainingHours: number
 }
 
 export async function loadMaintenanceData(): Promise<MaintenanceDataResult> {
-  const csvUrl = `${import.meta.env.BASE_URL}data/due-list.csv`;
-  const response = await fetch(csvUrl, { cache: 'no-store' });
-
-  if (!response.ok) {
-    throw new Error(`Failed to fetch CSV: ${response.status} ${response.statusText}`);
-  }
-
-  const csvText = await response.text();
+  const csvText = await fetchDueListCsv();
   if (!csvText.trim()) {
     throw new Error('CSV file is empty');
   }
