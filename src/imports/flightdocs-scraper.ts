@@ -5,25 +5,24 @@ import path from 'node:path';
 import os from 'node:os';
 import process from 'node:process';
 import { chromium } from 'playwright';
-import type { Download, Locator, Page } from 'playwright';
 import XLSX from 'xlsx';
 
-const LOGIN_URL: string =
+const LOGIN_URL =
   process.env.FLIGHTDOCS_LOGIN_URL ||
   'https://auth.flightdocs.com/Account/Login?__hstc=193061810.50028b67fb2f6ebd327064780a0369f2.1771774945459.1772225599054.1772303590618.4&__hssc=193061810.1.1772303590618&__hsfp=0c7e45a71c59be241ce8818a70547825&_gl=1*1u3iabr*_gcl_au*MjE0NTQzMDQ0NS4xNzcxNzc0OTQ3';
 
-const DUE_LIST_URL: string =
+const DUE_LIST_URL =
   process.env.FLIGHTDOCS_DUE_LIST_URL ||
   'https://app2.flightdocs.com/#/maintenance/item/due-list?IncludePaging=false&SortDirection=1&SortProperty=status&ItemDescriptionConstraint=1&PartNumberConstraint=1&SerialNumberConstraint=1&AdSbNumberConstraint=1&ShowTolerance=false&AircraftIds=4345&AircraftIds=4348&AircraftIds=4351&AircraftIds=4353&AircraftIds=4431&AircraftIds=17517&AircraftIds=23110&AircraftIds=34361&AircraftIds=34200&ProjectedHours=3200&OverrideHours';
 
 const OUTPUT_PATH = './public/data/due-list.csv';
 
-const MAX_ATTEMPTS: number = Number(process.env.FLIGHTDOCS_MAX_ATTEMPTS || 3);
-const HEADLESS: boolean = process.env.FLIGHTDOCS_HEADLESS !== 'false';
+const MAX_ATTEMPTS = Number(process.env.FLIGHTDOCS_MAX_ATTEMPTS || 3);
+const HEADLESS = process.env.FLIGHTDOCS_HEADLESS !== 'false';
 
 class NonRetryableError extends Error {}
 
-function getFirstEnv(names: string[]): string | undefined {
+function getFirstEnv(names) {
   for (const name of names) {
     const value = process.env[name];
     if (value) {
@@ -34,7 +33,7 @@ function getFirstEnv(names: string[]): string | undefined {
   return undefined;
 }
 
-function requireCredential(label: string, names: string[]): string {
+function requireCredential(label, names) {
   const value = getFirstEnv(names);
   if (!value) {
     throw new NonRetryableError(
@@ -47,19 +46,19 @@ function requireCredential(label: string, names: string[]): string {
   return value;
 }
 
-function timestamp(): string {
+function timestamp() {
   return new Date().toISOString();
 }
 
-function log(message: string): void {
+function log(message) {
   console.log(`[${timestamp()}] ${message}`);
 }
 
-async function ensureDir(dirPath: string): Promise<void> {
+async function ensureDir(dirPath) {
   await fs.mkdir(dirPath, { recursive: true });
 }
 
-async function getLocatorIfPresent(page: Page, selector: string): Promise<Locator | null> {
+async function getLocatorIfPresent(page, selector) {
   const locator = page.locator(selector).first();
   if ((await locator.count()) === 0) {
     return null;
@@ -68,7 +67,7 @@ async function getLocatorIfPresent(page: Page, selector: string): Promise<Locato
   return locator;
 }
 
-async function isClickable(locator: Locator): Promise<boolean> {
+async function isClickable(locator) {
   try {
     return (await locator.isVisible()) && (await locator.isEnabled());
   } catch {
@@ -76,7 +75,7 @@ async function isClickable(locator: Locator): Promise<boolean> {
   }
 }
 
-async function isEditable(locator: Locator): Promise<boolean> {
+async function isEditable(locator) {
   try {
     return (await locator.isVisible()) && (await locator.isEnabled()) && (await locator.isEditable());
   } catch {
@@ -84,7 +83,7 @@ async function isEditable(locator: Locator): Promise<boolean> {
   }
 }
 
-async function hasAnyEditableSelector(page: Page, selectors: string[]): Promise<boolean> {
+async function hasAnyEditableSelector(page, selectors) {
   for (const selector of selectors) {
     const locator = await getLocatorIfPresent(page, selector);
     if (locator && (await isEditable(locator))) {
@@ -95,7 +94,7 @@ async function hasAnyEditableSelector(page: Page, selectors: string[]): Promise<
   return false;
 }
 
-async function waitForAnyEditableSelector(page: Page, selectors: string[], timeoutMs: number): Promise<string> {
+async function waitForAnyEditableSelector(page, selectors, timeoutMs) {
   const start = Date.now();
 
   while (Date.now() - start < timeoutMs) {
@@ -112,7 +111,7 @@ async function waitForAnyEditableSelector(page: Page, selectors: string[], timeo
   throw new Error(`Timed out waiting for any editable selector: ${selectors.join(', ')}`);
 }
 
-async function clickFirst(page: Page, selectors: string[]): Promise<string> {
+async function clickFirst(page, selectors) {
   for (const selector of selectors) {
     const locator = await getLocatorIfPresent(page, selector);
     if (locator && (await isClickable(locator))) {
@@ -124,7 +123,7 @@ async function clickFirst(page: Page, selectors: string[]): Promise<string> {
   throw new Error(`Unable to click any selector: ${selectors.join(', ')}`);
 }
 
-async function fillFirst(page: Page, selectors: string[], value: string): Promise<string> {
+async function fillFirst(page, selectors, value) {
   for (const selector of selectors) {
     const locator = await getLocatorIfPresent(page, selector);
     if (locator && (await isEditable(locator))) {
@@ -136,11 +135,11 @@ async function fillFirst(page: Page, selectors: string[], value: string): Promis
   throw new Error(`Unable to fill any editable selector: ${selectors.join(', ')}`);
 }
 
-async function login(page: Page, username: string, password: string): Promise<void> {
+async function login(page, username, password) {
   log('Navigating to login page');
   await page.goto(LOGIN_URL, { waitUntil: 'domcontentloaded', timeout: 60_000 });
 
-  const usernameSelectors: string[] = [
+  const usernameSelectors = [
     'input[name="username"]',
     'input[name="Username"]',
     'input[name="email"]',
@@ -157,7 +156,7 @@ async function login(page: Page, username: string, password: string): Promise<vo
     'xpath=/html/body/div[2]/section/div/div[2]/form/div[1]/div/div/input',
   ];
 
-  const continueSelectors: string[] = [
+  const continueSelectors = [
     'button:has-text("Continue")',
     'button:has-text("Next")',
     'button:has-text("Proceed")',
@@ -165,7 +164,7 @@ async function login(page: Page, username: string, password: string): Promise<vo
     'input[type="submit"][value*="Next" i]',
   ];
 
-  const passwordSelectors: string[] = [
+  const passwordSelectors = [
     'input[name="password"]',
     'input[name="Password"]',
     'input[id="password"]',
@@ -203,12 +202,12 @@ async function login(page: Page, username: string, password: string): Promise<vo
   log(`Post-login URL: ${page.url()}`);
 }
 
-async function exportDueList(page: Page): Promise<Download> {
+async function exportDueList(page) {
   log('Navigating to due-list page');
   await page.goto(DUE_LIST_URL, { waitUntil: 'domcontentloaded', timeout: 90_000 });
   await page.waitForLoadState('networkidle', { timeout: 90_000 });
 
-  const exportSelectors: string[] = [
+  const exportSelectors = [
     'button:has-text("Export")',
     'a:has-text("Export")',
     '[aria-label="Export"]',
@@ -230,7 +229,7 @@ async function exportDueList(page: Page): Promise<Download> {
   throw new Error(`Unable to find Export button with selectors: ${exportSelectors.join(', ')}`);
 }
 
-async function convertExcelToCsv(excelPath: string, csvPath: string): Promise<void> {
+async function convertExcelToCsv(excelPath, csvPath) {
   const workbook = XLSX.readFile(excelPath, { cellDates: true });
   const sheetName = workbook.SheetNames[0];
   if (!sheetName) {
@@ -256,12 +255,18 @@ async function convertExcelToCsv(excelPath: string, csvPath: string): Promise<vo
   await fs.writeFile(tempPath, csv, 'utf8');
   await fs.rename(tempPath, csvPath);
 
-const stats = await fs.stat(csvPath);
+  const stats = await fs.stat(csvPath);
   log(`CSV written: ${csvPath} (${stats.size} bytes)`);
 
   // Cleanup: remove temp Excel, backup, and any stray xlsx/bak in data folder
-  try { await fs.unlink(excelPath); log(`Deleted temp Excel: ${excelPath}`); } catch {}
-  try { await fs.unlink(backupPath); } catch {}
+  try {
+    await fs.unlink(excelPath);
+    log(`Deleted temp Excel: ${excelPath}`);
+  } catch {}
+
+  try {
+    await fs.unlink(backupPath);
+  } catch {}
 
   try {
     const files = await fs.readdir(outputDir);
@@ -274,7 +279,7 @@ const stats = await fs.stat(csvPath);
   } catch {}
 }
 
-async function runOnce(): Promise<void> {
+async function runOnce() {
   const username = requireCredential('username', ['FLIGHTDOCS_USERNAME', 'FD_USERNAME', 'FLIGHTDOCS_USER']);
   const password = requireCredential('password', ['FLIGHTDOCS_PASSWORD', 'FD_PASSWORD', 'FLIGHTDOCS_PASS']);
 
@@ -303,7 +308,7 @@ async function runOnce(): Promise<void> {
   }
 }
 
-async function runWithRetries(): Promise<void> {
+async function runWithRetries() {
   let attempt = 0;
   while (attempt < MAX_ATTEMPTS) {
     attempt += 1;
@@ -328,7 +333,7 @@ async function runWithRetries(): Promise<void> {
   }
 }
 
-runWithRetries().catch((error: unknown) => {
+runWithRetries().catch((error) => {
   console.error(`[${timestamp()}] Fatal error:`, error);
   process.exit(1);
 });
