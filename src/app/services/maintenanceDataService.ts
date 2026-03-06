@@ -52,55 +52,66 @@ export const PHASE_INSPECTION_TYPES = TARGET_INTERVALS.map(i => PHASE_LABELS[i])
 
 // ── CSV Parsing ───────────────────────────────────────────────────────────────
 
-function parseCsvLine(line: string): string[] {
-  const values: string[] = [];
-  let current = '';
-  let inQuotes = false;
-
-  for (let i = 0; i < line.length; i++) {
-    const char = line[i];
-    const nextChar = line[i + 1];
-
-    if (char === '"') {
-      if (inQuotes && nextChar === '"') {
-        current += '"';
-        i++;
-      } else {
-        inQuotes = !inQuotes;
-      }
-    } else if (char === ',' && !inQuotes) {
-      values.push(current.trim());
-      current = '';
-    } else {
-      current += char;
-    }
-  }
-
-  values.push(current.trim());
-  return values;
-}
-
 /**
  * Parse CSV text into raw rows (header row is skipped).
- * Returns an array of string arrays, each being one row of values.
+ *
+ * Iterates character-by-character so that newlines embedded inside
+ * double-quoted fields (e.g. multi-line PAC notes) are treated as part
+ * of the field value rather than as row separators.
  */
 function parseRawCsv(csvText: string): string[][] {
-  const lines = csvText
-    .trim()
-    .split('\n')
-    .map(line => line.replace(/\r$/, ''));
+  const rows: string[][] = [];
+  let row: string[] = [];
+  let field = '';
+  let inQuotes = false;
 
-  if (lines.length < 2) return [];
+  // Normalise Windows and classic Mac line endings to LF
+  const text = csvText.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
 
-  // index 0 is the header — skip it
-  const result: string[][] = [];
-  for (let i = 1; i < lines.length; i++) {
-    const values = parseCsvLine(lines[i]);
-    if (values.some(v => v.length > 0)) {
-      result.push(values);
+  for (let i = 0; i <= text.length; i++) {
+    // Flush the last field/row at end-of-string
+    if (i === text.length) {
+      row.push(field.trim());
+      if (row.some(v => v.length > 0)) rows.push(row);
+      break;
+    }
+
+    const ch = text[i];
+
+    if (inQuotes) {
+      if (ch === '"') {
+        if (text[i + 1] === '"') {
+          // Escaped double-quote inside a quoted field
+          field += '"';
+          i++;
+        } else {
+          // Closing quote
+          inQuotes = false;
+        }
+      } else {
+        // Newlines inside a quoted field are part of the value
+        field += ch;
+      }
+    } else {
+      if (ch === '"') {
+        inQuotes = true;
+      } else if (ch === ',') {
+        row.push(field.trim());
+        field = '';
+      } else if (ch === '\n') {
+        // End of a data row
+        row.push(field.trim());
+        if (row.some(v => v.length > 0)) rows.push(row);
+        row = [];
+        field = '';
+      } else {
+        field += ch;
+      }
     }
   }
-  return result;
+
+  // rows[0] is the header — skip it
+  return rows.length > 1 ? rows.slice(1) : [];
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -120,9 +131,13 @@ function transformRawCsvData(rows: string[][]): {
   // Group rows by registration
   const byAircraft = new Map<string, string[][]>();
 
+  // Valid FAA N-number: starts with N followed by at least one digit/letter
+  const N_NUMBER = /^N[0-9A-Z]/i;
+
   for (const row of rows) {
     const reg = row[COL_REG]?.trim();
-    if (!reg) continue;
+    // Skip blank, header repeats, or continuation lines from multiline fields
+    if (!reg || !N_NUMBER.test(reg)) continue;
     if (!byAircraft.has(reg)) byAircraft.set(reg, []);
     byAircraft.get(reg)!.push(row);
   }
