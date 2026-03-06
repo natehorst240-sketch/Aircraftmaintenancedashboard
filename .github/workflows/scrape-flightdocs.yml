@@ -24,6 +24,9 @@ jobs:
       - name: Install dependencies
         run: npm install
 
+      - name: Install scraper runtime tools
+        run: npm install --no-save tsx playwright xlsx
+
       - name: Install Playwright Chromium
         run: npx playwright install --with-deps chromium
 
@@ -31,7 +34,25 @@ jobs:
         env:
           FLIGHTDOCS_USERNAME: ${{ secrets.FLIGHTDOCS_USERNAME }}
           FLIGHTDOCS_PASSWORD: ${{ secrets.FLIGHTDOCS_PASSWORD }}
-        run: node src/imports/flightdocs-scraper.ts
+        run: |
+          set -euo pipefail
+
+          commands=(
+            "node --import=tsx src/imports/flightdocs-scraper.ts"
+            "npx --yes tsx src/imports/flightdocs-scraper.ts"
+          )
+
+          for cmd in "${commands[@]}"; do
+            echo "Attempting scraper command: ${cmd}"
+            if eval "${cmd}"; then
+              echo "Scraper succeeded with command: ${cmd}"
+              exit 0
+            fi
+            echo "Scraper command failed, trying next option..."
+          done
+
+          echo "All scraper launch commands failed."
+          exit 1
 
       - name: Commit updated CSV (if changed)
         run: |

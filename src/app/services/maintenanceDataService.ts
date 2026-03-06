@@ -33,7 +33,7 @@
  * 
  *    Linux/Mac Cron:
  *      crontab -e
- *      Add line: 0 2 * * * cd /path/to/project && node src/imports/flightdocs-scraper.ts
+ *      Add line: 0 2 * * * cd /path/to/project && npx --yes tsx src/imports/flightdocs-scraper.ts
  * 
  *    GitHub Actions (recommended for cloud deployment):
  *      Create .github/workflows/scrape-flightdocs.yml with scheduled workflow
@@ -268,7 +268,7 @@ export const SCRAPER_SETUP_GUIDE = `
 crontab -e
 
 # Add this line (runs daily at 2:00 AM)
-0 2 * * * cd /path/to/project && /usr/bin/node src/imports/flightdocs-scraper.ts >> /var/log/flightdocs-scraper.log 2>&1
+0 2 * * * cd /path/to/project && npx --yes tsx src/imports/flightdocs-scraper.ts >> /var/log/flightdocs-scraper.log 2>&1
 \`\`\`
 
 ## Option 3: GitHub Actions (Recommended for Cloud)
@@ -292,7 +292,7 @@ jobs:
           node-version: '18'
       - run: npm install playwright xlsx
       - run: npx playwright install chromium
-      - run: node src/imports/flightdocs-scraper.ts
+      - run: npx --yes tsx src/imports/flightdocs-scraper.ts
         env:
           FLIGHTDOCS_USERNAME: \${{ secrets.FLIGHTDOCS_USERNAME }}
           FLIGHTDOCS_PASSWORD: \${{ secrets.FLIGHTDOCS_PASSWORD }}
