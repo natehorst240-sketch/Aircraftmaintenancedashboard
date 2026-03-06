@@ -14,9 +14,7 @@ If Vite shows an error like:
 
 `Failed to resolve import "react/jsx-dev-runtime" from "src/main.tsx"`
 
-it usually means your local install is incomplete/corrupted. Do a clean reinstall using the command set that matches your shell.
-
-### macOS / Linux (bash, zsh)
+it usually means your local install is incomplete/corrupted. Do a clean reinstall:
 
 ```bash
 # from project root
@@ -26,23 +24,11 @@ npm install
 npm run dev
 ```
 
-### Windows Command Prompt (cmd.exe)
-
-```bat
-:: from project root
-rmdir /s /q node_modules
-del /f /q package-lock.json
-npm cache verify
-npm install
-npm run dev
-```
-
-### Windows PowerShell
+On Windows PowerShell:
 
 ```powershell
-# from project root
 Remove-Item -Recurse -Force node_modules
-Remove-Item package-lock.json -ErrorAction SilentlyContinue
+Remove-Item package-lock.json -ErrorAction Ignore
 npm cache verify
 npm install
 npm run dev
