@@ -15,7 +15,7 @@ const DUE_LIST_URL =
   process.env.FLIGHTDOCS_DUE_LIST_URL ||
   'https://app2.flightdocs.com/#/maintenance/item/due-list?IncludePaging=false&SortDirection=1&SortProperty=status&ItemDescriptionConstraint=1&PartNumberConstraint=1&SerialNumberConstraint=1&AdSbNumberConstraint=1&ShowTolerance=false&AircraftIds=4345&AircraftIds=4348&AircraftIds=4351&AircraftIds=4353&AircraftIds=4431&AircraftIds=17517&AircraftIds=23110&AircraftIds=34361&AircraftIds=34200&ProjectedHours=3200&OverrideHours';
 
-const OUTPUT_PATH = './public/data/due-list.csv';
+const OUTPUT_PATH = process.env.FLIGHTDOCS_OUTPUT_PATH || './public/data/due-list.csv';
 
 const MAX_ATTEMPTS = Number(process.env.FLIGHTDOCS_MAX_ATTEMPTS || 3);
 const HEADLESS = process.env.FLIGHTDOCS_HEADLESS !== 'false';

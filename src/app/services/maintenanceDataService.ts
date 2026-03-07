@@ -227,8 +227,10 @@ function transformRawCsvData(rows: string[][]): {
     }
   }
 
-  return { aircraft, inspections, components };
-}
+  const aircraft = Array.from(aircraftMap.values()).map((entry) => ({
+    ...entry,
+    hoursUntil200Hr: Number.isFinite(entry.hoursUntil200Hr) ? entry.hoursUntil200Hr : 0,
+  }));
 
 // ── Public API ────────────────────────────────────────────────────────────────
 

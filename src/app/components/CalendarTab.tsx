@@ -288,6 +288,9 @@ export default function CalendarTab() {
     return "bg-blue-500 hover:bg-blue-600 border-blue-600";
   };
 
+  if (isLoading) return <div className="text-sm text-slate-600">Loading maintenance data...</div>;
+  if (error) return <div className="text-sm text-red-600">{error}</div>;
+
   return (
     <div className="space-y-4">
       {/* Toolbar */}
