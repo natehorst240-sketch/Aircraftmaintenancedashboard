@@ -15,15 +15,17 @@ import {
   WifiOff,
   Wifi,
 } from "lucide-react";
-import { aircraftData, Aircraft } from "../data/mockData";
+import { useMaintenanceData } from "../hooks/useMaintenanceData";
+import type { Aircraft } from "../types/maintenance";
 import { fetchFleetLiveData, ProcessedAircraftData } from "../services/adsbService";
 
 export default function MapTab() {
   const mapRef = useRef<L.Map | null>(null);
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const markersRef = useRef<{ [key: string]: L.Marker }>({});
+  const { aircraft, isLoading, error } = useMaintenanceData();
   const [selectedAircraft, setSelectedAircraft] = useState<Aircraft | null>(null);
-  const [aircraftPositions, setAircraftPositions] = useState(aircraftData);
+  const [aircraftPositions, setAircraftPositions] = useState<Aircraft[]>([]);
   const [mapStyle, setMapStyle] = useState<"satellite" | "streets">("satellite");
   const [autoFollow, setAutoFollow] = useState(false);
   const [isLoadingLiveData, setIsLoadingLiveData] = useState(false);
@@ -94,6 +96,10 @@ export default function MapTab() {
     newTileLayer.addTo(map);
     tileLayerRef.current = newTileLayer;
   }, [mapStyle]);
+
+  useEffect(() => {
+    setAircraftPositions(aircraft);
+  }, [aircraft]);
 
   // Fetch live ADS-B data
   const fetchLiveData = async () => {
@@ -325,6 +331,9 @@ export default function MapTab() {
     }
   };
 
+  if (isLoading) return <div className="text-sm text-slate-600">Loading maintenance data...</div>;
+  if (error) return <div className="text-sm text-red-600">{error}</div>;
+
   return (
     <div className="h-[calc(100vh-200px)] flex gap-4">
       {/* Sidebar */}
@@ -359,7 +368,7 @@ export default function MapTab() {
             <div className="space-y-2 text-sm">
               <div className="flex justify-between">
                 <span className="text-slate-600">Live Aircraft:</span>
-                <span className="font-semibold">{liveDataStatus.liveCount} / {aircraftData.length}</span>
+                <span className="font-semibold">{liveDataStatus.liveCount} / {aircraft.length}</span>
               </div>
               {liveDataStatus.lastUpdate && (
                 <div className="flex justify-between">
