@@ -79,6 +79,9 @@ export default function ComponentsTab() {
     );
   };
 
+  if (isLoading) return <div className="text-sm text-slate-600">Loading maintenance data...</div>;
+  if (error) return <div className="text-sm text-red-600">{error}</div>;
+
   return (
     <div className="space-y-6">
       {/* Header */}
